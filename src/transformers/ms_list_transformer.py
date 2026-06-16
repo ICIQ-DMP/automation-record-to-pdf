@@ -2,7 +2,7 @@
 Transformer for MS List CSV rows → AutomationRecord.
 
 Handles all field-type variations produced by the MS List CSV export:
-  - JSON arrays  (e.g. Motiu del canvi, Tipus d'automatització)
+  - JSON arrays  (e.g. Tipus d'automatització, Estat actual)
   - HTML strings (e.g. Descripció del procés actual, Riscos)
   - Semicolon-separated plain text (e.g. Propietari, Unitats)
   - Boolean strings ('True' / 'False')
@@ -56,41 +56,35 @@ class MSListTransformer(Transformer):
             internal_id=self._text(g("ID intern")),
             version=self._text(g("Version")),
             repository=self._text(g("Repositori")),
-            creation_date=self._date(g("Data de creació")),
             last_update_date=self._date(g("Data última actualització")),
             current_process_description=self._field(g("Descripció del procés actual")),
             # Section 2
             automated_process_description=self._field(g("Descripció del procés automatitzat")),
-            change_reason=self._json_list(g("Motiu del canvi")),
             # Section 3
             product_owner=self._text(g("Propietari de l'automatització (product owner)")),
             process_owner=self._semicolon_list(g("Propietari del procés de negoci (process owner)")),
             software_architect=architect,
-            manager=self._text(g("Manager")),
+            manager=self._text(g("Manager (responsible)")),
             developers=developers,
             user_units=self._semicolon_list(g("Unitats i persones usuàries del procés de negoci")),
-            benefits=self._field(g("Beneficis")),
+            output_receivers=self._semicolon_list(g("Persones i/o unitats que reben l'output")),
+            input_feeders=self._semicolon_list(g("Persones i/o unitats que alimenten l'input")),
             # Section 4
             automation_type=self._json_list(g("Tipus d´automatització")),
             technology=self._json_list(g("Llenguatge i tecnologia")),
             data_sources=self._field(g("Fonts de dades")),
             expected_output=self._field(g("Output esperat")),
             execution_frequency=self._json_list(g("Freqüència execució")),
-            dependencies=self._field(g("Dependències")),
+            dependencies_credentials=self._field(g("Dependències, credencials i permisos")),
             # Section 5
-            time_saved=self._hours_per_year(g("Temps estalviat (hores/any)")),
-            economic_impact=self._economic(g("Impacte econòmic estimat (€ / any)")),
+            benefits=self._field(g("Beneficis")),
             # Section 6
             current_status=self._json_list(g("Estat actual")),
             estimated_dev_time=self._hours(g("Temps estimat desenvolupament (hores totals)")),
-            actual_dev_time=self._hours(g("Temps real invertit (hores totals)")),
             implementation_deadline=self._date(g("Data final prevista implementació")),
             future_improvements=self._field(g("Millores Futures")),
             # Section 7
-            credentials_permissions=self._json_list(g("Credencials i permisos")),
             risks=self._field(g("Riscos")),
-            data_protection=self._boolean(g("Protecció de dades")),
-            logs_traceability=self._boolean(g("Logs i traçabilitat")),
         )
 
     # ------------------------------------------------------------------
@@ -170,27 +164,5 @@ class MSListTransformer(Transformer):
         try:
             float(v.replace(",", "."))
             return f"{v} hores"
-        except ValueError:
-            return v if v else _EMPTY
-
-    def _hours_per_year(self, value) -> str:
-        """Numeric hours/year → 'N h/any'."""
-        if self._empty(value):
-            return _EMPTY
-        v = str(value).strip()
-        try:
-            float(v.replace(",", "."))
-            return f"{v} h/any"
-        except ValueError:
-            return v if v else _EMPTY
-
-    def _economic(self, value) -> str:
-        """Numeric economic impact → 'N €/any'."""
-        if self._empty(value):
-            return _EMPTY
-        v = str(value).strip()
-        try:
-            float(v.replace(",", "."))
-            return f"{v} €/any"
         except ValueError:
             return v if v else _EMPTY

@@ -238,43 +238,78 @@ def _build_section(title: str, rows: list[tuple[str, str]]) -> Table:
     return table
 
 
-def _build_signature_block(
-    created_by: str,
-    responsible: str,
-    manager: str,
-    process_owner: str,
-) -> Table:
-    """Build the 4-column signature table."""
-    headers = ["Propietari de l'automatització", "Responsable automatització", "Manager", "Propietari procés"]
-    names = [created_by, responsible, manager, process_owner]
+def _build_signature_block(signers: list[tuple[str, str]]) -> list:
+    """
+    Build signature table(s) for N signers, arranged in rows of 4 columns.
+    Each entry in signers is a (role_label, name_value) tuple.
+    Returns a list of flowables (tables + spacers).
+    """
+    COLS = 4
     date_line = "Data: _______________"
+    flowables = []
 
-    data = [
-        [_para(h, _SIG_HEADER_STYLE) for h in headers],
-        [_para(n, _SIG_NAME_STYLE) for n in names],
-        [_para(date_line, _SIG_DATE_STYLE) for _ in range(4)],
-    ]
+    for chunk_start in range(0, len(signers), COLS):
+        chunk = signers[chunk_start:chunk_start + COLS]
+        # Pad to COLS with empty entries if needed
+        while len(chunk) < COLS:
+            chunk.append(("", ""))
 
-    style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), DARK_BLUE),
-        ("BOX", (0, 0), (-1, -1), 0.5, BORDER_COLOUR),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, BORDER_COLOUR),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("BACKGROUND", (0, 1), (-1, 1), colors.white),
-        ("BACKGROUND", (0, 2), (-1, 2), ROW_ALT_BG),
-    ]
+        header_row = []
+        name_row = []
+        sig_box_row = []  # empty row for handwritten signature
+        date_row = []
+        for role, name in chunk:
+            if role:
+                header_row.append(_para(role, _SIG_HEADER_STYLE))
+                name_row.append(_para(name, _SIG_NAME_STYLE))
+                sig_box_row.append("")
+                date_row.append(_para(date_line, _SIG_DATE_STYLE))
+            else:
+                header_row.append("")
+                name_row.append("")
+                sig_box_row.append("")
+                date_row.append("")
 
-    table = Table(
-        data,
-        colWidths=[SIG_COL_W] * 4,
-        hAlign="LEFT",
-    )
-    table.setStyle(TableStyle(style_cmds))
-    return table
+        data = [header_row, name_row, sig_box_row, date_row]
+
+        style_cmds = [
+            ("BACKGROUND", (0, 0), (-1, 0), DARK_BLUE),
+            ("BOX", (0, 0), (-1, -1), 0.5, BORDER_COLOUR),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, BORDER_COLOUR),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("BACKGROUND", (0, 1), (-1, 1), colors.white),
+            ("BACKGROUND", (0, 2), (-1, 2), colors.white),  # signature box — white, tall
+            ("ROWBACKGROUNDS", (0, 2), (-1, 2), [colors.white]),
+            ("MINROWHEIGHT", (0, 2), (-1, 2), 40),          # 40pt empty space for signature
+            ("BACKGROUND", (0, 3), (-1, 3), ROW_ALT_BG),
+        ]
+
+        # Remove borders and background for empty padding columns
+        for col_idx, (role, _) in enumerate(chunk):
+            if not role:
+                style_cmds.extend([
+                    ("BACKGROUND", (col_idx, 0), (col_idx, -1), colors.white),
+                    ("BOX", (col_idx, 0), (col_idx, -1), 0, colors.white),
+                    ("INNERGRID", (col_idx, 0), (col_idx, -1), 0, colors.white),
+                    ("LINEAFTER", (col_idx - 1, 0), (col_idx - 1, -1), 0.5, BORDER_COLOUR),
+                ])
+
+        table = Table(
+            data,
+            colWidths=[SIG_COL_W] * COLS,
+            hAlign="LEFT",
+        )
+        table.setStyle(TableStyle(style_cmds))
+        flowables.append(table)
+
+        if chunk_start + COLS < len(signers):
+            flowables.append(Spacer(1, 4))
+
+    return flowables
 
 
 # ---------------------------------------------------------------------------
@@ -309,11 +344,27 @@ class PDFRenderer(Renderer):
         sp8 = Spacer(1, 8)
         sp4 = Spacer(1, 4)
 
-        # Determine the process owner's first name for the signature block
-        # (take the first entry if it's a multi-line semicolon list)
-        sig_owner = r.process_owner.splitlines()[0] if r.process_owner != "—" else r.process_owner
+        # Build signature signers list: one box per individual person (all except developers)
+        role_fields = [
+            ("Unitats i persones usuàries", r.user_units),
+            ("Propietari de l'automatització", r.product_owner),
+            ("Propietari del procés de negoci", r.process_owner),
+            ("Arquitecte de software", r.software_architect),
+            ("Manager", r.manager),
+        ]
+        signers = []
+        for role, names_str in role_fields:
+            if names_str and names_str != "—":
+                for name in names_str.splitlines():
+                    name = name.strip()
+                    if name:
+                        signers.append((role, name))
+            else:
+                signers.append((role, "—"))
 
-        return [
+        sig_flowables = _build_signature_block(signers)
+
+        story = [
             # ── Title block ──────────────────────────────────────────────
             _para(f"{r.automation_name} – {r.process_name}", _TITLE_STYLE),
             _para(r.automation_name, _SUBTITLE_STYLE),
@@ -326,16 +377,14 @@ class PDFRenderer(Renderer):
                 ("1.3 ID intern", r.internal_id),
                 ("1.4 Versió", r.version),
                 ("1.5 Repositori", r.repository),
-                ("1.6 Data de creació", r.creation_date),
-                ("1.7 Data última actualització", r.last_update_date),
-                ("1.8 Descripció del procés actual", r.current_process_description),
+                ("1.6 Data última actualització", r.last_update_date),
+                ("1.7 Descripció del procés actual", r.current_process_description),
             ]),
             sp8,
 
             # ── Section 2 — Context ──────────────────────────────────────
             _build_section("Secció 2 — Context", [
                 ("2.1 Descripció del procés automatitzat", r.automated_process_description),
-                ("2.2 Motiu del canvi", r.change_reason),
             ]),
             sp8,
 
@@ -347,6 +396,8 @@ class PDFRenderer(Renderer):
                 ("3.4 Equip / Propietari de l'automatització", r.product_owner),
                 ("3.5 Desenvolupadors", r.developers),
                 ("3.6 Unitats i persones usuàries", r.user_units),
+                ("3.7 Persones que reben l'output", r.output_receivers),
+                ("3.8 Persones que alimenten l'input", r.input_feeders),
             ]),
             sp8,
 
@@ -357,15 +408,13 @@ class PDFRenderer(Renderer):
                 ("4.3 Fonts de dades", r.data_sources),
                 ("4.4 Output esperat", r.expected_output),
                 ("4.5 Freqüència d'execució", r.execution_frequency),
-                ("4.6 Dependències", r.dependencies),
+                ("4.6 Dependències, credencials i permisos", r.dependencies_credentials),
             ]),
             sp8,
 
             # ── Section 5 — Beneficis ─────────────────────────────────────
             _build_section("Secció 5 — Beneficis", [
-                ("5.1 Temps estalviat", r.time_saved),
-                ("5.2 Impacte econòmic estimat", r.economic_impact),
-                ("5.3 Beneficis i KPI", r.benefits),
+                ("5.1 Beneficis i KPI", r.benefits),
             ]),
             sp8,
 
@@ -373,28 +422,21 @@ class PDFRenderer(Renderer):
             _build_section("Secció 6 — Estat i Roadmap", [
                 ("6.1 Estat actual", r.current_status),
                 ("6.2 Temps estimat de desenvolupament", r.estimated_dev_time),
-                ("6.3 Temps real invertit", r.actual_dev_time),
-                ("6.4 Data final prevista d'implementació", r.implementation_deadline),
-                ("6.5 Millores futures", r.future_improvements),
+                ("6.3 Data final prevista d'implementació", r.implementation_deadline),
+                ("6.4 Millores futures", r.future_improvements),
             ]),
             sp8,
 
             # ── Section 7 — Seguretat i Compliance ───────────────────────
             _build_section("Secció 7 — Seguretat i Compliance", [
-                ("7.1 Credencials i permisos", r.credentials_permissions),
-                ("7.2 Identificació de riscos", r.risks),
-                ("7.3 Protecció de dades", r.data_protection),
-                ("7.4 Logs i traçabilitat", r.logs_traceability),
+                ("7.1 Identificació de riscos", r.risks),
             ]),
             sp8,
 
             # ── Signature block ───────────────────────────────────────────
             _build_section("Signatures i Validació", []),
             sp4,
-            _build_signature_block(
-                created_by=r.product_owner,
-                responsible=r.software_architect,
-                manager=r.manager,
-                process_owner=sig_owner,
-            ),
         ]
+
+        story.extend(sig_flowables)
+        return story

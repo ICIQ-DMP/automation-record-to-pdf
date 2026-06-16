@@ -19,13 +19,11 @@ class AutomationRecord:
     internal_id: str = ""
     version: str = ""
     repository: str = ""
-    creation_date: str = ""
     last_update_date: str = ""
     current_process_description: str = ""
 
     # Section 2 — Context
     automated_process_description: str = ""
-    change_reason: str = ""
 
     # Section 3 — Responsabilitats
     product_owner: str = ""       # Propietari de l'automatització (Creat per in signatures)
@@ -34,6 +32,8 @@ class AutomationRecord:
     manager: str = ""             # Manager (also signs the record)
     developers: str = ""          # Desenvolupadors
     user_units: str = ""          # Unitats i persones usuàries
+    output_receivers: str = ""    # Persones i/o unitats que reben l'output
+    input_feeders: str = ""       # Persones i/o unitats que alimenten l'input
 
     # Section 4 — Detalls Tècnics
     automation_type: str = ""
@@ -41,22 +41,16 @@ class AutomationRecord:
     data_sources: str = ""
     expected_output: str = ""
     execution_frequency: str = ""
-    dependencies: str = ""
+    dependencies_credentials: str = ""  # Dependències, credencials i permisos (combined)
 
     # Section 5 — Beneficis
-    time_saved: str = ""
-    economic_impact: str = ""
     benefits: str = ""
 
     # Section 6 — Estat i Roadmap
     current_status: str = ""
     estimated_dev_time: str = ""
-    actual_dev_time: str = ""
     implementation_deadline: str = ""
     future_improvements: str = ""
 
     # Section 7 — Seguretat i Compliance
-    credentials_permissions: str = ""
     risks: str = ""
-    data_protection: str = ""
-    logs_traceability: str = ""
