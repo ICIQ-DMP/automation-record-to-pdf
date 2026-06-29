@@ -194,23 +194,24 @@ _SECTION_PADDING = dict(
 def _build_section(title: str, rows: list[tuple[str, str]]) -> Table:
     """
     Build a section table:
-      row 0  — full-width dark-blue header with white title text
-      row 1+ — label (light-blue bg) | value (alternating white/light-grey)
+      row 0      — full-width dark-blue header with white title text
+      per field  — label row (full-width light-blue) then value row (full-width, alternating bg)
+
+    Stacked layout (label above value) allows long value content to wrap at full content width,
+    keeping each row short enough for ReportLab's splitByRow to handle page breaks correctly.
     """
     header_cell = _para(title, _SECTION_HEADER_STYLE)
     data = [[header_cell, ""]]
-    for label_text, value_text in rows:
-        data.append([_label(label_text), _value(value_text)])
 
-    n = len(data)  # total rows
+    for label_text, value_text in rows:
+        data.append([_label(label_text), ""])  # label row: spans full width
+        data.append([_value(value_text), ""])  # value row: spans full width
 
     style_cmds = [
         # Header row: span + dark blue background
         ("SPAN", (0, 0), (1, 0)),
         ("BACKGROUND", (0, 0), (1, 0), DARK_BLUE),
         ("ALIGN", (0, 0), (1, 0), "LEFT"),
-        # Label column (col 0, rows 1+)
-        ("BACKGROUND", (0, 1), (0, n - 1), LABEL_BG),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         # Borders
         ("BOX", (0, 0), (-1, -1), 0.5, BORDER_COLOUR),
@@ -223,15 +224,21 @@ def _build_section(title: str, rows: list[tuple[str, str]]) -> Table:
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]
 
-    # Alternating value cell backgrounds
-    for i in range(1, n):
-        bg = colors.white if i % 2 == 1 else ROW_ALT_BG
-        style_cmds.append(("BACKGROUND", (1, i), (1, i), bg))
+    for i, _ in enumerate(rows):
+        label_row = 1 + i * 2
+        value_row = 1 + i * 2 + 1
+        # Each label and value row spans both columns
+        style_cmds.append(("SPAN", (0, label_row), (1, label_row)))
+        style_cmds.append(("SPAN", (0, value_row), (1, value_row)))
+        style_cmds.append(("BACKGROUND", (0, label_row), (1, label_row), LABEL_BG))
+        bg = colors.white if i % 2 == 0 else ROW_ALT_BG
+        style_cmds.append(("BACKGROUND", (0, value_row), (1, value_row), bg))
 
     table = Table(
         data,
         colWidths=[LABEL_COL_W, VALUE_COL_W],
         repeatRows=0,
+        splitByRow=1,
         hAlign="LEFT",
     )
     table.setStyle(TableStyle(style_cmds))
@@ -367,7 +374,7 @@ class PDFRenderer(Renderer):
         story = [
             # ── Title block ──────────────────────────────────────────────
             _para(f"{r.automation_name} – {r.process_name}", _TITLE_STYLE),
-            _para(r.automation_name, _SUBTITLE_STYLE),
+            _para("Fitxa de Definició i Aprovació d'Automatització", _SUBTITLE_STYLE),
             Spacer(1, 14),
 
             # ── Section 1 — Identificació ────────────────────────────────

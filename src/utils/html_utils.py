@@ -34,6 +34,10 @@ class _HTMLToText(HTMLParser):
                 self._parts.append("\n")
 
     def handle_data(self, data: str):
+        # Collapse internal whitespace (including newlines from HTML source formatting)
+        data = " ".join(data.split())
+        if not data:
+            return
         if self._pending_bullet:
             self._parts.append("• " + data)
             self._pending_bullet = False
